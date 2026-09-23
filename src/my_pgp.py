@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Première étape de my_pgp : interface et chiffrement XOR."""
+"""Première étape de my_pgp : interface et chiffrements XOR / AES-128."""
 
 import re
 import sys
@@ -28,7 +28,7 @@ DESCRIPTION
 
     CRYPTO_SYSTEM
         xor         XOR algorithm (implemented)
-        aes         AES algorithm (not implemented yet)
+        aes         AES-128 algorithm (implemented)
         rsa         RSA algorithm (not implemented yet)
         pgp-xor     RSA and XOR (not implemented yet)
         pgp-aes     RSA and AES (not implemented yet)
@@ -58,10 +58,10 @@ def parse_arguments(arguments):
     system, mode, *remaining = arguments
     if system not in SYSTEMS:
         raise ValueError("unknown cryptosystem: " + system)
-    if system != "xor":
+    if system not in ("xor", "aes"):
         raise ValueError(system + " is not implemented yet")
     if mode not in ("-c", "-d"):
-        raise ValueError("XOR mode must be -c or -d")
+        raise ValueError(system.upper() + " mode must be -c or -d")
     block_mode = remaining[0] == "-b"
     if block_mode:
         remaining = remaining[1:]

@@ -1,8 +1,8 @@
 # my_pgp — première étape
 
 Implémentation en Python 3, sans dépendance externe : interface en ligne de
-commande, aide `-h`, XOR en modes bloc et flux, erreurs sur stderr avec code 84.
-AES, RSA et PGP restent à implémenter ; leur utilisation renvoie une erreur explicite.
+commande, aide `-h`, XOR et AES-128 en modes bloc et flux, erreurs sur stderr avec code 84.
+RSA et PGP restent à implémenter ; leur utilisation renvoie une erreur explicite.
 
 ```sh
 make
@@ -18,7 +18,7 @@ Organisation du code :
 
 - `src/my_pgp.py` : arguments, aide, entrées/sorties et sélection du système.
 - `src/xor.py` : fonctions `encrypt` et `decrypt` pour XOR, implémentées.
-- `src/aes.py` : fonctions `encrypt` et `decrypt` pour AES, à compléter.
+- `src/aes.py` : fonctions `encrypt` et `decrypt` pour AES-128, implémentées.
 - `src/rsa.py` : fonctions `encrypt`, `decrypt` et `generate_keys`, à compléter.
 - `src/pgp_xor.py` : fonctions `encrypt` et `decrypt` pour PGP-XOR, à compléter.
 - `src/pgp_aes.py` : fonctions `encrypt` et `decrypt` pour PGP-AES, à compléter.
@@ -27,7 +27,7 @@ Organisation du code :
 Conserver le dossier `src` à côté du lanceur.
 Les règles `clean`, `fclean` et `re` sont disponibles.
 
-Chaque bloc du message est inversé pour obtenir sa représentation numérique
+Pour XOR, chaque bloc du message est inversé pour obtenir sa représentation numérique
 little-endian, puis combiné avec les octets de la clé par XOR. Le déchiffrement
 fait l'opération inverse. Cela reproduit l'exemple du sujet.
 
@@ -36,3 +36,27 @@ suivi d'un LF, comme dans l'exemple. Le message doit avoir la taille de la clé.
 En mode flux, les retours à la ligne du texte sont conservés et le dernier bloc
 est complété avec des octets nuls. Ces octets sont conservés au déchiffrement :
 sans longueur d'origine, on ne peut pas les distinguer des données réelles.
+
+## AES-128
+
+AES est implémenté en Python : expansion de clé, SubBytes, ShiftRows,
+MixColumns, AddRoundKey et transformations inverses. La matrice est remplie
+colonne par colonne. Le cœur suit FIPS 197 :
+https://csrc.nist.gov/pubs/fips/197/final
+
+La clé doit contenir exactement 32 chiffres hexadécimaux (16 octets).
+Pour reproduire l'exemple du sujet, la clé et le chiffré sont convertis en
+little-endian **par mots de 4 octets** ; le message clair garde son ordre.
+Cette convention est vérifiée séparément des vecteurs AES standard.
+
+```sh
+printf 'All men must die\n' | ./my_pgp aes -c -b 57696e74657220697320636f6d696e67
+# 744ce22c385958348f0df26eceb62eef
+printf '744ce22c385958348f0df26eceb62eef\n' | ./my_pgp aes -d -b 57696e74657220697320636f6d696e67
+# All men must die
+```
+
+En bloc, le texte doit faire exactement 16 octets après retrait du LF final.
+En flux, chaque bloc de 16 octets est chiffré indépendamment ; le dernier est
+complété avec des zéros, conservés au déchiffrement. AES-192 et AES-256 ne sont
+pas encore implémentés.
