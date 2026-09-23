@@ -4,6 +4,21 @@
 import re
 import sys
 
+import aes
+import pgp_aes
+import pgp_xor
+import rsa
+import xor
+
+
+SYSTEMS = {
+    "xor": xor,
+    "aes": aes,
+    "rsa": rsa,
+    "pgp-xor": pgp_xor,
+    "pgp-aes": pgp_aes,
+}
+
 
 HELP = """USAGE
     ./my_pgp CRYPTO_SYSTEM MODE [OPTIONS] [key]
@@ -41,7 +56,7 @@ def parse_arguments(arguments):
     if len(arguments) < 3:
         raise ValueError("expected CRYPTO_SYSTEM MODE [-b] key; use -h for help")
     system, mode, *remaining = arguments
-    if system not in ("xor", "aes", "rsa", "pgp-xor", "pgp-aes"):
+    if system not in SYSTEMS:
         raise ValueError("unknown cryptosystem: " + system)
     if system != "xor":
         raise ValueError(system + " is not implemented yet")
@@ -52,27 +67,8 @@ def parse_arguments(arguments):
         remaining = remaining[1:]
     if len(remaining) != 1:
         raise ValueError("expected exactly one key after the optional -b flag")
-    return mode, block_mode, parse_hex(remaining[0])
+    return SYSTEMS[system], mode, block_mode, parse_hex(remaining[0])
 
-
-def xor_message(data, key, decrypt=False, block_mode=False):
-    """Traite chaque bloc selon la représentation little-endian du sujet."""
-    size = len(key)
-    if block_mode and len(data) != size:
-        raise ValueError("in block mode, the message and key must have the same size")
-    if decrypt and len(data) % size:
-        raise ValueError("ciphertext must contain complete blocks")
-    result = bytearray()
-    for offset in range(0, len(data), size):
-        block = data[offset:offset + size]
-        if decrypt:
-            clear = bytes(byte ^ mask for byte, mask in zip(block, key))
-            result.extend(clear[::-1])
-        else:
-            # Compléter le dernier bloc avant de le convertir en nombre.
-            block = block.ljust(size, b"\x00")
-            result.extend(byte ^ mask for byte, mask in zip(block[::-1], key))
-    return bytes(result)
 
 
 def main():
@@ -80,7 +76,7 @@ def main():
         print(HELP, end="")
         return 0
     try:
-        mode, block_mode, key = parse_arguments(sys.argv[1:])
+        system, mode, block_mode, key = parse_arguments(sys.argv[1:])
         data = sys.stdin.buffer.read()
         # Le LF terminal est ignoré en bloc et dans la représentation hex.
         if (block_mode or mode == "-d") and data.endswith(b"\n"):
@@ -89,7 +85,8 @@ def main():
             raise ValueError("block mode expects a single line")
         if mode == "-d":
             data = parse_hex(data.decode("ascii")) if data else b""
-        result = xor_message(data, key, mode == "-d", block_mode)
+        operation = system.encrypt if mode == "-c" else system.decrypt
+        result = operation(data, key, block_mode)
         if mode == "-c":
             sys.stdout.buffer.write(result.hex().encode("ascii") + b"\n")
         else:

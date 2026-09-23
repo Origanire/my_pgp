@@ -14,7 +14,17 @@ printf '20070f2700071c6a4449060a490515164e4e12190b190011063c\n' | ./my_pgp xor -
 make tests_run
 ```
 
-Le code est dans `src/my_pgp.py`. `make` crée l'exécutable `my_pgp`.
+Organisation du code :
+
+- `src/my_pgp.py` : arguments, aide, entrées/sorties et sélection du système.
+- `src/xor.py` : fonctions `encrypt` et `decrypt` pour XOR, implémentées.
+- `src/aes.py` : fonctions `encrypt` et `decrypt` pour AES, à compléter.
+- `src/rsa.py` : fonctions `encrypt`, `decrypt` et `generate_keys`, à compléter.
+- `src/pgp_xor.py` : fonctions `encrypt` et `decrypt` pour PGP-XOR, à compléter.
+- `src/pgp_aes.py` : fonctions `encrypt` et `decrypt` pour PGP-AES, à compléter.
+
+`make` crée le lanceur `my_pgp`, qui exécute `src/my_pgp.py`.
+Conserver le dossier `src` à côté du lanceur.
 Les règles `clean`, `fclean` et `re` sont disponibles.
 
 Chaque bloc du message est inversé pour obtenir sa représentation numérique

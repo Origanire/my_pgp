@@ -2,8 +2,8 @@
 
 all: my_pgp
 
-my_pgp: src/my_pgp.py
-	cp $< $@
+my_pgp: $(wildcard src/*.py) Makefile
+	printf '%s\n' '#!/bin/sh' 'exec python3 "$$(dirname "$$0")/src/my_pgp.py" "$$@"' > $@
 	chmod +x $@
 
 clean:
