@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Première étape de my_pgp : interface et chiffrements XOR / AES-128."""
+"""Première étape de my_pgp : interface et chiffrements XOR / AES-128 / RSA."""
 
 import re
 import sys
@@ -29,19 +29,19 @@ DESCRIPTION
     CRYPTO_SYSTEM
         xor         XOR algorithm (implemented)
         aes         AES-128 algorithm (implemented)
-        rsa         RSA algorithm (not implemented yet)
+        rsa         RSA algorithm (implemented)
         pgp-xor     RSA and XOR (not implemented yet)
         pgp-aes     RSA and AES (not implemented yet)
 
     MODE
         -c          Cipher a clear message
         -d          Decipher a hexadecimal message
-        -g P Q      Generate RSA keys (not implemented yet)
+        -g P Q      Generate RSA keys from little-endian primes
 
     OPTIONS
         -b          Process one block, the same size as the key
 
-    key             Non-empty hexadecimal key in little-endian order
+    key             Hexadecimal symmetric key or RSA exponent-modulus (little-endian)
 """
 
 
@@ -58,8 +58,12 @@ def parse_arguments(arguments):
     system, mode, *remaining = arguments
     if system not in SYSTEMS:
         raise ValueError("unknown cryptosystem: " + system)
-    if system not in ("xor", "aes"):
+    if system not in ("xor", "aes", "rsa"):
         raise ValueError(system + " is not implemented yet")
+    if system == "rsa" and mode == "-g":
+        if len(remaining) != 2:
+            raise ValueError("RSA generation expects exactly two primes P Q")
+        return rsa, mode, False, tuple(remaining)
     if mode not in ("-c", "-d"):
         raise ValueError(system.upper() + " mode must be -c or -d")
     block_mode = remaining[0] == "-b"
@@ -67,6 +71,9 @@ def parse_arguments(arguments):
         remaining = remaining[1:]
     if len(remaining) != 1:
         raise ValueError("expected exactly one key after the optional -b flag")
+    if system == "rsa":
+        rsa.parse_key(remaining[0])
+        return rsa, mode, block_mode, remaining[0]
     return SYSTEMS[system], mode, block_mode, parse_hex(remaining[0])
 
 
@@ -77,12 +84,18 @@ def main():
         return 0
     try:
         system, mode, block_mode, key = parse_arguments(sys.argv[1:])
+        if mode == "-g":
+            public, private = rsa.generate_keys(*key)
+            print("public key: " + public)
+            print("private key: " + private)
+            return 0
+        single_line = block_mode or system is rsa
         data = sys.stdin.buffer.read()
         # Le LF terminal est ignoré en bloc et dans la représentation hex.
-        if (block_mode or mode == "-d") and data.endswith(b"\n"):
+        if (single_line or mode == "-d") and data.endswith(b"\n"):
             data = data[:-1]
-        if block_mode and b"\n" in data:
-            raise ValueError("block mode expects a single line")
+        if single_line and b"\n" in data:
+            raise ValueError("this mode expects a single line")
         if mode == "-d":
             data = parse_hex(data.decode("ascii")) if data else b""
         operation = system.encrypt if mode == "-c" else system.decrypt
@@ -90,7 +103,7 @@ def main():
         if mode == "-c":
             sys.stdout.buffer.write(result.hex().encode("ascii") + b"\n")
         else:
-            sys.stdout.buffer.write(result + (b"\n" if block_mode else b""))
+            sys.stdout.buffer.write(result + (b"\n" if single_line else b""))
         return 0
     except (ValueError, OSError) as error:
         print("my_pgp: " + str(error), file=sys.stderr)

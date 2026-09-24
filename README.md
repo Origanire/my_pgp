@@ -1,8 +1,8 @@
 # my_pgp — première étape
 
 Implémentation en Python 3, sans dépendance externe : interface en ligne de
-commande, aide `-h`, XOR et AES-128 en modes bloc et flux, erreurs sur stderr avec code 84.
-RSA et PGP restent à implémenter ; leur utilisation renvoie une erreur explicite.
+commande, aide `-h`, XOR et AES-128 en modes bloc et flux, RSA, erreurs sur stderr avec code 84.
+PGP reste à implémenter ; son utilisation renvoie une erreur explicite.
 
 ```sh
 make
@@ -19,7 +19,7 @@ Organisation du code :
 - `src/my_pgp.py` : arguments, aide, entrées/sorties et sélection du système.
 - `src/xor.py` : fonctions `encrypt` et `decrypt` pour XOR, implémentées.
 - `src/aes.py` : fonctions `encrypt` et `decrypt` pour AES-128, implémentées.
-- `src/rsa.py` : fonctions `encrypt`, `decrypt` et `generate_keys`, à compléter.
+- `src/rsa.py` : fonctions `encrypt`, `decrypt` et `generate_keys`, implémentées.
 - `src/pgp_xor.py` : fonctions `encrypt` et `decrypt` pour PGP-XOR, à compléter.
 - `src/pgp_aes.py` : fonctions `encrypt` et `decrypt` pour PGP-AES, à compléter.
 
@@ -60,3 +60,25 @@ En bloc, le texte doit faire exactement 16 octets après retrait du LF final.
 En flux, chaque bloc de 16 octets est chiffré indépendamment ; le dernier est
 complété avec des zéros, conservés au déchiffrement. AES-192 et AES-256 ne sont
 pas encore implémentés.
+
+## RSA
+
+Génération avec λ(n) = ppcm(p − 1, q − 1), le plus grand premier de Fermat
+admissible parmi 65537, 257, 17, 5 et 3, puis d = e⁻¹ mod λ(n).
+Les premiers sont supposés premiers, comme autorisé par le sujet.
+Les clés ont le format `exposant-module`, chaque nombre étant en little-endian.
+
+```sh
+./my_pgp rsa -g d3 e3
+# public key: 0101-19bb
+# private key: 9d5b-19bb
+printf 'WF\n' | ./my_pgp rsa -c 0101-19bb
+# 8f84
+printf '8f84\n' | ./my_pgp rsa -d 9d5b-19bb
+# WF
+```
+
+RSA traite une seule ligne avec ou sans `-b`, ignore le LF final à l'entrée
+et ajoute un LF à la sortie. La valeur little-endian du message doit être
+strictement inférieure au module. Cette implémentation suit le RSA sans padding
+du sujet ; la longueur d'origine et les octets nuls terminaux ne sont pas conservés.
