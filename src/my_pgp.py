@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Première étape de my_pgp : interface et chiffrements XOR / AES-128 / RSA."""
+"""Première étape de my_pgp : interface et chiffrements XOR / AES-128 / RSA / PGP-XOR."""
 
 import re
 import sys
@@ -30,7 +30,7 @@ DESCRIPTION
         xor         XOR algorithm (implemented)
         aes         AES-128 algorithm (implemented)
         rsa         RSA algorithm (implemented)
-        pgp-xor     RSA and XOR (not implemented yet)
+        pgp-xor     RSA and XOR (implemented)
         pgp-aes     RSA and AES (not implemented yet)
 
     MODE
@@ -42,6 +42,7 @@ DESCRIPTION
         -b          Process one block, the same size as the key
 
     key             Hexadecimal symmetric key or RSA exponent-modulus (little-endian)
+                    PGP-XOR: symmetric-key:RSA-key (-d: encrypted symmetric key)
 """
 
 
@@ -58,7 +59,7 @@ def parse_arguments(arguments):
     system, mode, *remaining = arguments
     if system not in SYSTEMS:
         raise ValueError("unknown cryptosystem: " + system)
-    if system not in ("xor", "aes", "rsa"):
+    if system not in ("xor", "aes", "rsa", "pgp-xor"):
         raise ValueError(system + " is not implemented yet")
     if system == "rsa" and mode == "-g":
         if len(remaining) != 2:
@@ -71,6 +72,9 @@ def parse_arguments(arguments):
         remaining = remaining[1:]
     if len(remaining) != 1:
         raise ValueError("expected exactly one key after the optional -b flag")
+    if system == "pgp-xor":
+        pgp_xor.parse_key(remaining[0])
+        return pgp_xor, mode, block_mode, remaining[0]
     if system == "rsa":
         rsa.parse_key(remaining[0])
         return rsa, mode, block_mode, remaining[0]
@@ -101,6 +105,9 @@ def main():
         operation = system.encrypt if mode == "-c" else system.decrypt
         result = operation(data, key, block_mode)
         if mode == "-c":
+            if system is pgp_xor:
+                encrypted_key, result = result
+                sys.stdout.buffer.write(encrypted_key.hex().encode("ascii") + b"\n")
             sys.stdout.buffer.write(result.hex().encode("ascii") + b"\n")
         else:
             sys.stdout.buffer.write(result + (b"\n" if single_line else b""))

@@ -1,8 +1,8 @@
 # my_pgp — première étape
 
 Implémentation en Python 3, sans dépendance externe : interface en ligne de
-commande, aide `-h`, XOR et AES-128 en modes bloc et flux, RSA, erreurs sur stderr avec code 84.
-PGP reste à implémenter ; son utilisation renvoie une erreur explicite.
+commande, aide `-h`, XOR et AES-128 en modes bloc et flux, RSA et PGP-XOR, erreurs sur stderr avec code 84.
+PGP-AES reste à implémenter ; son utilisation renvoie une erreur explicite.
 
 ```sh
 make
@@ -20,7 +20,7 @@ Organisation du code :
 - `src/xor.py` : fonctions `encrypt` et `decrypt` pour XOR, implémentées.
 - `src/aes.py` : fonctions `encrypt` et `decrypt` pour AES-128, implémentées.
 - `src/rsa.py` : fonctions `encrypt`, `decrypt` et `generate_keys`, implémentées.
-- `src/pgp_xor.py` : fonctions `encrypt` et `decrypt` pour PGP-XOR, à compléter.
+- `src/pgp_xor.py` : combinaison RSA et XOR, implémentée.
 - `src/pgp_aes.py` : fonctions `encrypt` et `decrypt` pour PGP-AES, à compléter.
 
 `make` crée le lanceur `my_pgp`, qui exécute `src/my_pgp.py`.
@@ -82,3 +82,23 @@ RSA traite une seule ligne avec ou sans `-b`, ignore le LF final à l'entrée
 et ajoute un LF à la sortie. La valeur little-endian du message doit être
 strictement inférieure au module. Cette implémentation suit le RSA sans padding
 du sujet ; la longueur d'origine et les octets nuls terminaux ne sont pas conservés.
+
+## PGP-XOR
+
+La clé est au format `clé_XOR:clé_RSA`. Le chiffrement affiche la clé XOR
+chiffrée par RSA, puis le message chiffré par XOR, sur deux lignes.
+Au déchiffrement, passer la première ligne avant `:` avec la clé RSA privée,
+et uniquement la deuxième ligne sur l'entrée standard.
+
+```sh
+printf 'AB\n' | ./my_pgp pgp-xor -c -b 5746:0101-19bb
+# 8f84
+# 1507
+printf '1507\n' | ./my_pgp pgp-xor -d -b 8f84:9d5b-19bb
+# AB
+```
+
+Les modes bloc et flux suivent les conventions XOR. En mode bloc, la taille du
+chiffré permet de restaurer les octets nuls terminaux de la clé récupérée par RSA.
+En flux, la longueur de clé n'est pas transmise : utiliser une clé XOR sans octet
+nul terminal, car RSA renvoie une représentation minimale du nombre.
