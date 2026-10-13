@@ -1,4 +1,4 @@
-.PHONY: all clean fclean re tests_run
+.PHONY: all clean fclean re tests_run benchmark
 
 all: my_pgp
 
@@ -7,7 +7,7 @@ my_pgp: $(wildcard src/*.py) Makefile
 	chmod +x $@
 
 clean:
-	rm -rf src/__pycache__ tests/__pycache__
+	rm -rf src/__pycache__ tests/__pycache__ bonus/__pycache__
 
 fclean: clean
 	rm -f my_pgp
@@ -17,3 +17,6 @@ re: fclean
 
 tests_run: all
 	python3 -m unittest discover -s tests -v
+
+benchmark:
+	python3 bonus/benchmark_rsa.py

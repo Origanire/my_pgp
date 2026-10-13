@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Interface des chiffrements XOR, AES-128, RSA, PGP-XOR et PGP-AES."""
+"""Interface des chiffrements XOR, AES, RSA, PGP-XOR et PGP-AES."""
 
 import re
 import sys
@@ -28,7 +28,7 @@ DESCRIPTION
 
     CRYPTO_SYSTEM
         xor         XOR algorithm (implemented)
-        aes         AES-128 algorithm (implemented)
+        aes         AES-128/192/256 algorithms (implemented)
         rsa         RSA algorithm (implemented)
         pgp-xor     RSA and XOR (implemented)
         pgp-aes     RSA and AES-128 (implemented)
@@ -39,7 +39,7 @@ DESCRIPTION
         -g P Q      Generate RSA keys from little-endian primes
 
     OPTIONS
-        -b          Process one block, the same size as the key
+        -b          Process one block (AES: 16 bytes; XOR: key size)
 
     key             Hexadecimal symmetric key or RSA exponent-modulus (little-endian)
                     PGP-XOR/PGP-AES: symmetric-key:RSA-key (-d: encrypted symmetric key)

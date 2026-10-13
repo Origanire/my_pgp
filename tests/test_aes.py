@@ -18,6 +18,12 @@ class AesTests(unittest.TestCase):
              "00112233445566778899aabbccddeeff",
              "69c4e0d86a7b0430d8cdb78070b4c55a"),
             ("00" * 16, "00" * 16, "66e94bd4ef8a2c3b884cfa59ca342b2e"),
+            ("000102030405060708090a0b0c0d0e0f1011121314151617",
+             "00112233445566778899aabbccddeeff",
+             "dda97ca4864cdfe06eaf70a0ec0d7191"),
+            ("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+             "00112233445566778899aabbccddeeff",
+             "8ea2b7ca516745bfeafc49904b496089"),
         ]
         for key, clear, cipher in vectors:
             with self.subTest(key=key):
@@ -26,6 +32,25 @@ class AesTests(unittest.TestCase):
                                  bytes.fromhex(cipher))
                 self.assertEqual(aes._decrypt_block(bytes.fromhex(cipher), rounds),
                                  bytes.fromhex(clear))
+
+    def test_extended_keys_cli(self):
+        clear = bytes.fromhex("00112233445566778899aabbccddeeff")
+        for size, expected in ((24, "dda97ca4864cdfe06eaf70a0ec0d7191"),
+                               (32, "8ea2b7ca516745bfeafc49904b496089")):
+            key = aes._little_endian_words(bytes(range(size))).hex()
+            cipher = run("aes", "-c", "-b", key, data=clear)
+            self.assertEqual(cipher.returncode, 0, cipher.stderr)
+            self.assertEqual(cipher.stdout,
+                             aes._little_endian_words(bytes.fromhex(expected)).hex().encode() + b"\n")
+            restored = run("aes", "-d", "-b", key, data=cipher.stdout)
+            self.assertEqual(restored.returncode, 0, restored.stderr)
+            self.assertEqual(restored.stdout, clear + b"\n")
+            data = bytes(range(256)) + b"\x00\n"
+            cipher = run("aes", "-c", key, data=data)
+            restored = run("aes", "-d", key, data=cipher.stdout)
+            self.assertEqual(cipher.returncode, 0, cipher.stderr)
+            self.assertEqual(restored.returncode, 0, restored.stderr)
+            self.assertEqual(restored.stdout, data + b"\x00" * (-len(data) % 16))
 
     def test_subject_encryption(self):
         result = run("aes", "-c", "-b", KEY, data=CLEAR)
@@ -61,7 +86,7 @@ class AesTests(unittest.TestCase):
     def test_invalid_inputs(self):
         cases = [
             (["-c", "00" * size], b"A" * 16)
-            for size in (1, 15, 17, 24, 32)
+            for size in (1, 15, 17, 23, 25, 31, 33)
         ]
         cases += [(["-c", "-b", KEY], b"A" * size) for size in (0, 15, 17, 32)]
         cases += [(["-d", KEY], b"00" * 15),
