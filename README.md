@@ -1,274 +1,155 @@
-# my_pgp — première étape
+# my_pgp
 
-Implémentation en Python 3, sans dépendance externe : interface en ligne de
-commande, aide `-h`, XOR et AES-128 en modes bloc et flux, RSA, PGP-XOR et PGP-AES, erreurs sur stderr avec code 84.
-PGP-AES est également implémenté. Voir [ALGO.md](ALGO.md) pour la synthèse des algorithmes.
+Implémentation pédagogique en Python 3.9 ou supérieur, sans dépendance externe :
+XOR, AES-128/192/256, RSA, PGP-XOR et PGP-AES. Les algorithmes sont répartis en
+modules ; l'interface assure la validation des arguments et les entrées/sorties.
+Les erreurs sont écrites sur stderr avec le code 84 ; le succès retourne 0.
+
+Le [guide des compétences](COMPETENCES.md) relie les quatre objectifs au code,
+aux preuves de fonctionnement et aux notions à expliquer à l'oral.
+Le [cours](App.md) présente progressivement les algorithmes.
+La [synthèse des algorithmes](ALGO.md) résume chaque implémentation.
+
+## Construire et vérifier
 
 ```sh
 make
 ./my_pgp -h
-printf 'You know nothing, Jon Snow\n' | ./my_pgp xor -c -b 576861742069732064656164206d6179206e6576657220646965
-# 20070f2700071c6a4449060a490515164e4e12190b190011063c
-printf '20070f2700071c6a4449060a490515164e4e12190b190011063c\n' | ./my_pgp xor -d -b 576861742069732064656164206d6179206e6576657220646965
-# You know nothing, Jon Snow
 make tests_run
+make benchmark
+python3 bonus/demo_security.py
 ```
 
-Organisation du code :
+`make` crée un lanceur qui exécute `src/my_pgp.py` ; conserver `src` à côté.
+`clean`, `fclean` et `re` permettent de nettoyer et reconstruire le projet.
+Le benchmark et les démonstrations de sécurité sont dans `bonus/`.
 
-- `src/my_pgp.py` : arguments, aide, entrées/sorties et sélection du système.
-- `src/xor.py` : fonctions `encrypt` et `decrypt` pour XOR, implémentées.
-- `src/aes.py` : fonctions `encrypt` et `decrypt` pour AES-128, implémentées.
-- `src/rsa.py` : fonctions `encrypt`, `decrypt` et `generate_keys`, implémentées.
-- `src/pgp_xor.py` : combinaison RSA et XOR, implémentée.
-- `src/pgp_aes.py` : combinaison RSA et AES-128, implémentée.
+## Interface
 
-`make` crée le lanceur `my_pgp`, qui exécute `src/my_pgp.py`.
-Conserver le dossier `src` à côté du lanceur.
-Les règles `clean`, `fclean` et `re` sont disponibles.
-
-Pour XOR, chaque bloc du message est inversé pour obtenir sa représentation numérique
-little-endian, puis combiné avec les octets de la clé par XOR. Le déchiffrement
-fait l'opération inverse. Cela reproduit l'exemple du sujet.
-
-En mode bloc (`-b`), le LF final est ignoré à l'entrée et le texte déchiffré est
-suivi d'un LF, comme dans l'exemple. Le message doit avoir la taille de la clé.
-En mode flux, les retours à la ligne du texte sont conservés et le dernier bloc
-est complété avec des octets nuls. Ces octets sont conservés au déchiffrement :
-sans longueur d'origine, on ne peut pas les distinguer des données réelles.
-
-## AES-128
-
-AES est implémenté en Python : expansion de clé, SubBytes, ShiftRows,
-MixColumns, AddRoundKey et transformations inverses. La matrice est remplie
-colonne par colonne. Le cœur suit FIPS 197 :
-https://csrc.nist.gov/pubs/fips/197/final
-
-La clé doit contenir exactement 32 chiffres hexadécimaux (16 octets).
-Pour reproduire l'exemple du sujet, la clé et le chiffré sont convertis en
-little-endian **par mots de 4 octets** ; le message clair garde son ordre.
-Cette convention est vérifiée séparément des vecteurs AES standard.
-
-```sh
-printf 'All men must die\n' | ./my_pgp aes -c -b 57696e74657220697320636f6d696e67
-# 744ce22c385958348f0df26eceb62eef
-printf '744ce22c385958348f0df26eceb62eef\n' | ./my_pgp aes -d -b 57696e74657220697320636f6d696e67
-# All men must die
+```text
+./my_pgp CRYPTO_SYSTEM -c [-b] key
+./my_pgp CRYPTO_SYSTEM -d [-b] key
+./my_pgp rsa -g P Q
 ```
 
-En bloc, le texte doit faire exactement 16 octets après retrait du LF final.
-En flux, chaque bloc de 16 octets est chiffré indépendamment ; le dernier est
-complété avec des zéros, conservés au déchiffrement. AES-192 et AES-256 ne sont
-pas encore implémentés.
+Le clair entre sous forme d'octets sur stdin, le chiffré sous forme hexadécimale.
+Le chiffrement produit de l'hexadécimal suivi d'un LF. Le déchiffrement en flux
+symétrique/hybride écrit les octets directement, sans ajouter de LF.
 
-## RSA
+| Système | Clé | Taille du bloc clair avec `-b` |
+| --- | --- | --- |
+| `xor` | Hexadécimal, longueur quelconque non nulle | Taille de la clé |
+| `aes` | 16, 24 ou 32 octets hexadécimaux | Toujours 16 octets |
+| `rsa` | `exposant-module`, entiers little-endian | Un entier inférieur au module |
+| `pgp-xor` | `clé_XOR:clé_RSA` | Taille de la clé XOR |
+| `pgp-aes` | `clé_AES_128:clé_RSA` | 16 octets |
 
-Génération avec λ(n) = ppcm(p − 1, q − 1), le plus grand premier de Fermat
-admissible parmi 65537, 257, 17, 5 et 3, puis d = e⁻¹ mod λ(n).
-Les premiers sont supposés premiers, comme autorisé par le sujet.
-Les clés ont le format `exposant-module`, chaque nombre étant en little-endian.
+Avec `-d` hybride, remplacer la clé symétrique par sa version chiffrée par RSA.
+Le format hybride fixe AES à 128 bits : la longueur de la clé n'est pas transmise.
+AES-192/256 sont disponibles avec le système `aes`. Contrairement à AES-128,
+leur taille de clé diffère de la taille de bloc ; `-b` traite toujours 16 octets.
 
-```sh
-./my_pgp rsa -g d3 e3
-# public key: 0101-19bb
-# private key: 9d5b-19bb
-printf 'WF\n' | ./my_pgp rsa -c 0101-19bb
-# 8f84
-printf '8f84\n' | ./my_pgp rsa -d 9d5b-19bb
-# WF
-```
+En mode bloc, le LF final éventuel est retiré à l'entrée, les autres LF sont
+refusés, et le déchiffrement ajoute un LF. RSA suit cette convention même sans
+`-b`. En flux, les octets du clair, y compris les LF et NUL, sont conservés.
+Le dernier bloc symétrique incomplet est complété avec des zéros. Ceux-ci sont
+conservés après déchiffrement : leur suppression détruirait les NUL réels.
 
-RSA traite une seule ligne avec ou sans `-b`, ignore le LF final à l'entrée
-et ajoute un LF à la sortie. La valeur little-endian du message doit être
-strictement inférieure au module. Cette implémentation suit le RSA sans padding
-du sujet ; la longueur d'origine et les octets nuls terminaux ne sont pas conservés.
-
-## PGP-XOR
-
-La clé est au format `clé_XOR:clé_RSA`. Le chiffrement affiche la clé XOR
-chiffrée par RSA, puis le message chiffré par XOR, sur deux lignes.
-Au déchiffrement, passer la première ligne avant `:` avec la clé RSA privée,
-et uniquement la deuxième ligne sur l'entrée standard.
+## Exemples du sujet
 
 ```sh
-printf 'AB\n' | ./my_pgp pgp-xor -c -b 5746:0101-19bb
-# 8f84
-# 1507
-printf '1507\n' | ./my_pgp pgp-xor -d -b 8f84:9d5b-19bb
-# AB
-```
-
-Les modes bloc et flux suivent les conventions XOR. En mode bloc, la taille du
-chiffré permet de restaurer les octets nuls terminaux de la clé récupérée par RSA.
-En flux, la longueur de clé n'est pas transmise : utiliser une clé XOR sans octet
-nul terminal, car RSA renvoie une représentation minimale du nombre.
-
-## PGP-AES
-
-PGP-AES chiffre une clé AES de 16 octets avec RSA et le message avec AES-128.
-Le format est `clé_AES:clé_RSA_publique` au chiffrement et
-`clé_AES_chiffrée:clé_RSA_privée` au déchiffrement. Le module RSA doit être
-supérieur à la valeur little-endian de la clé AES.
-
-```sh
-printf 'All men must die\n' | ./my_pgp pgp-aes -c -b "57696e74657220697320636f6d696e67:$PUBLIC_KEY"
-# Première ligne : clé AES chiffrée par RSA.
-# Deuxième ligne : 744ce22c385958348f0df26eceb62eef
-printf '744ce22c385958348f0df26eceb62eef\n' | ./my_pgp pgp-aes -d -b "$ENCRYPTED_KEY:$PRIVATE_KEY"
-# All men must die
-```
-
-Dans cet exemple, `PUBLIC_KEY` et `PRIVATE_KEY` sont les clés obtenues avec
-`rsa -g P Q`, et `ENCRYPTED_KEY` est la première ligne du chiffrement.
-Les modes bloc et flux suivent les conventions AES. Les zéros terminaux de la
-clé sont restaurés à 16 octets dans les deux modes.
-
-## Commandes de test
-
-Les commandes suivantes couvrent les systèmes, les modes bloc (`-b`) et flux,
-ainsi que les cas d'erreur. Elles sont à lancer depuis la racine du projet.
-
-### Compilation et tests automatisés
-
-```sh
-# Construire le lanceur
-make
-
-# Afficher l'aide
-./my_pgp -h
-
-# Exécuter toute la suite de tests unittest
-make tests_run
-
-# Nettoyer les fichiers temporaires Python
-make clean
-
-# Supprimer aussi le lanceur
-make fclean
-
-# Recréer complètement le lanceur
-make re
-```
-
-### XOR
-
-```sh
-# Flux : chiffrement d'un message de longueur quelconque
-printf 'ABC' | ./my_pgp xor -c 0102
-# 43430141
-
-# Flux : déchiffrement (le zéro de remplissage est conservé)
-printf '43430141\n' | ./my_pgp xor -d 0102
-# ABC<octet NUL>
-
-# Bloc : chiffrement (la longueur du message doit être celle de la clé)
 printf 'You know nothing, Jon Snow\n' |
   ./my_pgp xor -c -b 576861742069732064656164206d6179206e6576657220646965
 # 20070f2700071c6a4449060a490515164e4e12190b190011063c
 
-# Bloc : déchiffrement
-printf '20070f2700071c6a4449060a490515164e4e12190b190011063c\n' |
-  ./my_pgp xor -d -b 576861742069732064656164206d6179206e6576657220646965
-# You know nothing, Jon Snow
-
-# Flux binaire (les 256 octets sont chiffrés puis déchiffrés)
-python3 -c 'import sys; sys.stdout.buffer.write(bytes(range(256)))' |
-  ./my_pgp xor -c aabbcc > /tmp/xor.hex
-./my_pgp xor -d aabbcc < /tmp/xor.hex > /tmp/xor.clear
-python3 -c 'import sys; print(len(sys.stdin.buffer.read()))' < /tmp/xor.clear
-# 258 (256 octets + le remplissage éventuel et le LF de sortie)
-rm -f /tmp/xor.hex /tmp/xor.clear
-```
-
-### AES-128
-
-```sh
-# Flux : un bloc complet
-printf 'All men must die\n' | ./my_pgp aes -c \
-  57696e74657220697320636f6d696e67
+printf 'All men must die\n' |
+  ./my_pgp aes -c -b 57696e74657220697320636f6d696e67
 # 744ce22c385958348f0df26eceb62eef
 
-# Flux : déchiffrement
-printf '744ce22c385958348f0df26eceb62eef\n' | ./my_pgp aes -d \
-  57696e74657220697320636f6d696e67
+printf '744ce22c385958348f0df26eceb62eef\n' |
+  ./my_pgp aes -d -b 57696e74657220697320636f6d696e67
 # All men must die
 
-# Flux : dernier bloc complété par des zéros, puis déchiffrement
-printf 'ABC' | ./my_pgp aes -c 000102030405060708090a0b0c0d0e0f > /tmp/aes.hex
-cat /tmp/aes.hex
-./my_pgp aes -d 000102030405060708090a0b0c0d0e0f < /tmp/aes.hex
-# ABC<octets NUL>
-
-# Bloc : chiffrement et déchiffrement d'exactement 16 octets
-printf '1234567890abcdef\n' | ./my_pgp aes -c -b \
-  000102030405060708090a0b0c0d0e0f > /tmp/aes-block.hex
-./my_pgp aes -d -b 000102030405060708090a0b0c0d0e0f < /tmp/aes-block.hex
-# 1234567890abcdef
-rm -f /tmp/aes.hex /tmp/aes-block.hex
-```
-
-En bloc, un message différent de 16 octets doit être refusé.
-
-### RSA
-
-```sh
-# Générer une paire de clés à partir de deux nombres premiers
 ./my_pgp rsa -g d3 e3
 # public key: 0101-19bb
 # private key: 9d5b-19bb
-
-# Chiffrer puis déchiffrer une ligne
 printf 'WF\n' | ./my_pgp rsa -c 0101-19bb
 # 8f84
 printf '8f84\n' | ./my_pgp rsa -d 9d5b-19bb
 # WF
 
-# RSA accepte aussi l'option -b (elle n'a pas d'effet supplémentaire)
-printf 'WF\n' | ./my_pgp rsa -c -b 0101-19bb
-printf '8f84\n' | ./my_pgp rsa -d -b 9d5b-19bb
-```
-
-### PGP-XOR
-
-```sh
-# Bloc : le résultat contient d'abord la clé XOR chiffrée, puis le message
 printf 'AB\n' | ./my_pgp pgp-xor -c -b 5746:0101-19bb
 # 8f84
 # 1507
-
-# Bloc : déchiffrer avec la clé RSA privée et la clé XOR récupérée
 printf '1507\n' | ./my_pgp pgp-xor -d -b 8f84:9d5b-19bb
 # AB
-
-# Flux : chiffrement et déchiffrement d'un message de longueur quelconque
-printf 'ABC' | ./my_pgp pgp-xor -c 0102:0101-19bb > /tmp/pgp-xor.out
-head -n 1 /tmp/pgp-xor.out
-tail -n 1 /tmp/pgp-xor.out |
-  ./my_pgp pgp-xor -d "$(head -n 1 /tmp/pgp-xor.out):9d5b-19bb"
-rm -f /tmp/pgp-xor.out
 ```
 
-### Système non implémenté
+### PGP-AES : exemple reproductible
 
 ```sh
-# PGP-AES doit échouer avec le code 84 et un message sur stderr
-printf 'test' | ./my_pgp pgp-aes -c 00 2>/tmp/my_pgp.err
-test "$?" -eq 84
-cat /tmp/my_pgp.err
-rm -f /tmp/my_pgp.err
+P=4b1da73924978f2e9c1f04170e46820d648edbee12ccf4d4462af89b080c86e1
+Q=bb3ca1e126f7c8751bd81bc8daa226494efb3d128f72ed9f6cacbe96e14166cb
+./my_pgp rsa -g "$P" "$Q" > /tmp/my-pgp.keys
+PUBLIC=$(sed -n 's/^public key: //p' /tmp/my-pgp.keys)
+PRIVATE=$(sed -n 's/^private key: //p' /tmp/my-pgp.keys)
+printf 'All men must die\n' |
+  ./my_pgp pgp-aes -c -b "57696e74657220697320636f6d696e67:$PUBLIC" > /tmp/my-pgp.cipher
+# Première ligne : clé AES chiffrée ; deuxième ligne : message chiffré.
+ENCRYPTED_KEY=$(head -n 1 /tmp/my-pgp.cipher)
+tail -n 1 /tmp/my-pgp.cipher |
+  ./my_pgp pgp-aes -d -b "$ENCRYPTED_KEY:$PRIVATE"
+# All men must die
+rm -f /tmp/my-pgp.keys /tmp/my-pgp.cipher
 ```
 
-### Vérification des entrées invalides
+Ces premiers publics sont des données de test, pas des clés secrètes.
 
-Chaque commande ci-dessous doit retourner `84` et écrire une erreur sur
-`stderr` :
+### Flux binaire
 
 ```sh
-./my_pgp unknown -c aa
-./my_pgp xor -c zz
-./my_pgp xor -c -b aaaa <<<'A'
-./my_pgp xor -d aa <<<'zz'
-./my_pgp aes -c aa
-./my_pgp rsa -g aa
-./my_pgp pgp-xor -c 01:0101-19bb <<<'A'
+python3 -c 'import sys; sys.stdout.buffer.write(bytes(range(256)))' > /tmp/my-pgp.bin
+./my_pgp aes -c 000102030405060708090a0b0c0d0e0f < /tmp/my-pgp.bin > /tmp/my-pgp.hex
+./my_pgp aes -d 000102030405060708090a0b0c0d0e0f < /tmp/my-pgp.hex > /tmp/my-pgp.clear
+cmp /tmp/my-pgp.bin /tmp/my-pgp.clear
+# Identiques : 256 est un multiple de 16, donc aucun remplissage.
+rm -f /tmp/my-pgp.bin /tmp/my-pgp.hex /tmp/my-pgp.clear
 ```
+
+## Modules et conventions
+
+- `src/my_pgp.py` : CLI et registre de sélection des systèmes.
+- `src/xor.py` : XOR, inversion de chaque bloc, remplissage nul.
+- `src/aes.py` : S-box, expansion de clé, transformations AES et inverses.
+- `src/rsa.py` : parsing little-endian, Carmichael, inverse modulaire et `pow`.
+- `src/hybrid.py` : composition commune RSA + primitive symétrique.
+- `src/pgp_xor.py` et `src/pgp_aes.py` : configuration des deux compositions.
+
+Chaque primitive fournit `encrypt(data, key, block_mode=False)` et `decrypt(...)`.
+Les fonctions manipulent des `bytes` ; la CLI s'occupe de l'hexadécimal.
+Le chiffrement hybride renvoie `(clé_chiffrée, message_chiffré)`.
+
+Pour reproduire le vecteur AES du sujet, l'adaptateur inverse les octets de la
+clé et du chiffré par mots de quatre octets. Le cœur AES est standard et testé
+séparément avec des vecteurs connus. RSA encode chaque entier en little-endian,
+avec la longueur minimale d'au moins un octet.
+
+RSA perd donc les NUL terminaux du clair. En PGP-AES, la longueur fixe permet de
+restaurer la clé sur 16 octets. En PGP-XOR bloc, la taille du chiffré fournit la
+longueur. En PGP-XOR flux, les clés de plusieurs octets terminées par NUL sont
+refusées au chiffrement : leur longueur serait irrécupérable avec ce format.
+
+## Propriétés et limites
+
+Le projet suit les conventions pédagogiques du sujet : XOR répété, AES par
+blocs indépendants de type ECB, RSA sans padding. Il ne fournit ni
+authentification des messages ni authentification des clés publiques.
+La combinaison hybride conserve ces limites. Voir les démonstrations et
+l'analyse détaillée dans [COMPETENCES.md](COMPETENCES.md).
+
+AES est spécifié par [FIPS 197](https://csrc.nist.gov/pubs/fips/197/final).
+Les modes de chiffrement sont décrits par
+[NIST SP 800-38A](https://csrc.nist.gov/pubs/sp/800/38/a/final),
+l'authentification GCM par
+[NIST SP 800-38D](https://csrc.nist.gov/pubs/sp/800/38/d/final),
+et RSA-OAEP par [RFC 8017](https://www.rfc-editor.org/rfc/rfc8017).

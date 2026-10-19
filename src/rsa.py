@@ -30,6 +30,8 @@ def _transform(data, key):
     value = int.from_bytes(data, "little")
     if value >= modulus:
         raise ValueError("RSA message must be smaller than the modulus")
+    # pow à trois arguments réduit modulo n pendant l'exponentiation.
+    # Ne pas calculer value ** exponent : cet entier intermédiaire serait énorme.
     return _to_bytes(pow(value, exponent, modulus))
 
 
@@ -55,11 +57,11 @@ def generate_keys(p, q):
     if p <= 1 or q <= 1 or p == q:
         raise ValueError("RSA requires two distinct primes greater than one")
     modulus = p * q
-    totient = (p - 1) * (q - 1) // gcd(p - 1, q - 1)
+    carmichael = (p - 1) * (q - 1) // gcd(p - 1, q - 1)
     exponent = next((e for e in (65537, 257, 17, 5, 3)
-                     if e < totient and gcd(e, totient) == 1), None)
+                     if e < carmichael and gcd(e, carmichael) == 1), None)
     if exponent is None:
         raise ValueError("no valid Fermat prime exponent for these RSA primes")
-    private = pow(exponent, -1, totient)
+    private = pow(exponent, -1, carmichael)
     suffix = "-" + _to_bytes(modulus).hex()
     return _to_bytes(exponent).hex() + suffix, _to_bytes(private).hex() + suffix

@@ -1,10 +1,11 @@
-"""AES-128 : blocs de 16 octets, sans bibliothèque de chiffrement externe.
+"""AES-128/192/256 : blocs de 16 octets, sans bibliothèque externe.
 
 L'état AES est rangé colonne par colonne. L'interface du sujet représente
 la clé et le chiffré en little-endian par mots de 32 bits.
 """
 
 BLOCK_SIZE = 16
+KEY_SIZES = (16, 24, 32)
 
 # Table SubBytes définie par FIPS 197.
 SBOX = bytes.fromhex(
@@ -44,20 +45,24 @@ def _multiply(a, b):
 
 
 def _expand_key(key):
-    """Développe la clé AES-128 en onze clés de tour de 16 octets."""
-    if len(key) != BLOCK_SIZE:
-        raise ValueError("AES-128 requires a 16-byte key (32 hexadecimal digits)")
+    """Développe la clé en Nr + 1 clés de tour (Nr = Nk + 6)."""
+    if len(key) not in KEY_SIZES:
+        raise ValueError("AES requires a 16-, 24- or 32-byte key")
+    key_size = len(key)
+    expanded_size = BLOCK_SIZE * (key_size // 4 + 7)
     expanded = list(key)
     rcon = 1
-    while len(expanded) < 176:
+    while len(expanded) < expanded_size:
         word = expanded[-4:]
-        if len(expanded) % BLOCK_SIZE == 0:
+        if len(expanded) % key_size == 0:
             word = [SBOX[value] for value in word[1:] + word[:1]]
             word[0] ^= rcon
             rcon = _multiply(rcon, 2)
+        elif key_size == 32 and len(expanded) % key_size == 16:
+            word = [SBOX[value] for value in word]
         for value in word:
-            expanded.append(expanded[-BLOCK_SIZE] ^ value)
-    return [expanded[i:i + BLOCK_SIZE] for i in range(0, 176, BLOCK_SIZE)]
+            expanded.append(expanded[-key_size] ^ value)
+    return [expanded[i:i + BLOCK_SIZE] for i in range(0, expanded_size, BLOCK_SIZE)]
 
 
 def _add_round_key(state, key):
@@ -89,8 +94,8 @@ def _little_endian_words(data):
 
 
 def _validate(data, key, block_mode, decrypting=False):
-    if len(key) != BLOCK_SIZE:
-        raise ValueError("AES-128 requires a 16-byte key (32 hexadecimal digits)")
+    if len(key) not in KEY_SIZES:
+        raise ValueError("AES requires a 16-, 24- or 32-byte key")
     if block_mode and len(data) != BLOCK_SIZE:
         raise ValueError("AES block mode requires exactly 16 message bytes")
     if decrypting and len(data) % BLOCK_SIZE:
@@ -102,10 +107,11 @@ def _validate(data, key, block_mode, decrypting=False):
 def _encrypt_block(block, round_keys):
     """Cœur AES standard : un bloc, sans conversion de représentation."""
     state = _add_round_key(block, round_keys[0])
-    for round_number in range(1, 11):
+    rounds = len(round_keys) - 1
+    for round_number in range(1, rounds + 1):
         state = [SBOX[value] for value in state]
         state = _shift_rows(state)
-        if round_number != 10:
+        if round_number != rounds:
             state = _mix_columns(state)
         state = _add_round_key(state, round_keys[round_number])
     return bytes(state)
@@ -125,9 +131,10 @@ def encrypt(data, key, block_mode=False):
 # Déchiffrement
 
 def _decrypt_block(block, round_keys):
-    """Inverse les dix tours AES pour retrouver un bloc clair."""
-    state = _add_round_key(block, round_keys[10])
-    for round_number in range(9, -1, -1):
+    """Inverse les tours AES pour retrouver un bloc clair."""
+    rounds = len(round_keys) - 1
+    state = _add_round_key(block, round_keys[rounds])
+    for round_number in range(rounds - 1, -1, -1):
         state = _shift_rows(state, inverse=True)
         state = [INV_SBOX[value] for value in state]
         state = _add_round_key(state, round_keys[round_number])

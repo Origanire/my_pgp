@@ -62,7 +62,8 @@ clés de tour dans l'ordre inverse.
 À l'interface, la clé et le chiffré sont convertis en little-endian par mots
 de quatre octets : chaque groupe de quatre octets est inversé. Le clair garde
 son ordre. Chaque bloc est chiffré indépendamment, comme en ECB, sans IV.
-AES-192 et AES-256 ne sont pas implémentés.
+AES-192 et AES-256 sont aussi disponibles avec le système `aes` (12 et 14 tours) ;
+PGP-AES reste limité à AES-128.
 
 ## RSA
 
