@@ -1,8 +1,8 @@
 # my_pgp — première étape
 
 Implémentation en Python 3, sans dépendance externe : interface en ligne de
-commande, aide `-h`, XOR et AES-128 en modes bloc et flux, RSA et PGP-XOR, erreurs sur stderr avec code 84.
-PGP-AES reste à implémenter ; son utilisation renvoie une erreur explicite.
+commande, aide `-h`, XOR et AES-128 en modes bloc et flux, RSA, PGP-XOR et PGP-AES, erreurs sur stderr avec code 84.
+PGP-AES est également implémenté. Voir [ALGO.md](ALGO.md) pour la synthèse des algorithmes.
 
 ```sh
 make
@@ -21,7 +21,7 @@ Organisation du code :
 - `src/aes.py` : fonctions `encrypt` et `decrypt` pour AES-128, implémentées.
 - `src/rsa.py` : fonctions `encrypt`, `decrypt` et `generate_keys`, implémentées.
 - `src/pgp_xor.py` : combinaison RSA et XOR, implémentée.
-- `src/pgp_aes.py` : fonctions `encrypt` et `decrypt` pour PGP-AES, à compléter.
+- `src/pgp_aes.py` : combinaison RSA et AES-128, implémentée.
 
 `make` crée le lanceur `my_pgp`, qui exécute `src/my_pgp.py`.
 Conserver le dossier `src` à côté du lanceur.
@@ -102,6 +102,26 @@ Les modes bloc et flux suivent les conventions XOR. En mode bloc, la taille du
 chiffré permet de restaurer les octets nuls terminaux de la clé récupérée par RSA.
 En flux, la longueur de clé n'est pas transmise : utiliser une clé XOR sans octet
 nul terminal, car RSA renvoie une représentation minimale du nombre.
+
+## PGP-AES
+
+PGP-AES chiffre une clé AES de 16 octets avec RSA et le message avec AES-128.
+Le format est `clé_AES:clé_RSA_publique` au chiffrement et
+`clé_AES_chiffrée:clé_RSA_privée` au déchiffrement. Le module RSA doit être
+supérieur à la valeur little-endian de la clé AES.
+
+```sh
+printf 'All men must die\n' | ./my_pgp pgp-aes -c -b "57696e74657220697320636f6d696e67:$PUBLIC_KEY"
+# Première ligne : clé AES chiffrée par RSA.
+# Deuxième ligne : 744ce22c385958348f0df26eceb62eef
+printf '744ce22c385958348f0df26eceb62eef\n' | ./my_pgp pgp-aes -d -b "$ENCRYPTED_KEY:$PRIVATE_KEY"
+# All men must die
+```
+
+Dans cet exemple, `PUBLIC_KEY` et `PRIVATE_KEY` sont les clés obtenues avec
+`rsa -g P Q`, et `ENCRYPTED_KEY` est la première ligne du chiffrement.
+Les modes bloc et flux suivent les conventions AES. Les zéros terminaux de la
+clé sont restaurés à 16 octets dans les deux modes.
 
 ## Commandes de test
 
