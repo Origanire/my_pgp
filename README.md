@@ -1,5 +1,9 @@
 # my_pgp
 
+[![Tests](https://github.com/Origanire/my_pgp/actions/workflows/tests.yml/badge.svg)](https://github.com/Origanire/my_pgp/actions/workflows/tests.yml)
+
+> **English summary.** XOR, AES-128/192/256 and RSA implemented from scratch in Python, combined into PGP-style hybrid schemes, with tests and security demos. Educational only: the subject requires unpadded RSA and ECB-style AES. Documentation below is in French.
+
 Implémentation pédagogique en Python 3.9 ou supérieur, sans dépendance externe :
 XOR, AES-128/192/256, RSA, PGP-XOR et PGP-AES. Les algorithmes sont répartis en
 modules ; l'interface assure la validation des arguments et les entrées/sorties.
