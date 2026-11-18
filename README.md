@@ -5,6 +5,11 @@ XOR, AES-128/192/256, RSA, PGP-XOR et PGP-AES. Les algorithmes sont répartis en
 modules ; l'interface assure la validation des arguments et les entrées/sorties.
 Les erreurs sont écrites sur stderr avec le code 84 ; le succès retourne 0.
 
+> **À ne pas utiliser pour protéger de vraies données.** Le sujet impose RSA sans
+> padding, AES en blocs indépendants (type ECB) et un XOR répété : ces choix
+> sont volontaires pour l'apprentissage et leurs faiblesses sont démontrées dans
+> `bonus/`. Voir [Propriétés et limites](#propriétés-et-limites).
+
 Le [guide des compétences](COMPETENCES.md) relie les quatre objectifs au code,
 aux preuves de fonctionnement et aux notions à expliquer à l'oral.
 Le [cours](App.md) présente progressivement les algorithmes.
